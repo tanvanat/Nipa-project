@@ -1,34 +1,38 @@
+# Longhorn deps
 - name: Install Longhorn dependencies
-  apt:
+  ansible.builtin.apt:
     name:
       - open-iscsi
       - nfs-common
     state: present
+    update_cache: yes
+    cache_valid_time: 3600
 
-- name: Enable iscsid
-  systemd:
-    name: iscsid
+# Start iSCSI service (Ubuntu uses open-iscsi; fall back to iscsid if present)
+- name: Enable/start iSCSI service
+  ansible.builtin.systemd:
+    name: "{{ item }}"
     enabled: yes
     state: started
+  loop:
+    - open-iscsi
+    - iscsid
+  failed_when: false
 
-- name: Format and mount disk
-  block:
-    - name: Format disk
-      filesystem:
-        fstype: ext4
-        dev: /dev/vdb1
-        force: yes
+# Ensure mountpoint exists
+- name: Create Longhorn mount directory
+  ansible.builtin.file:
+    path: /var/lib/longhorn
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
 
-    - name: Create mount point
-      file:
-        path: /var/lib/longhorn
-        state: directory
-
-    - name: Add fstab entry
-      lineinfile:
-        path: /etc/fstab
-        line: "/dev/vdb1 /var/lib/longhorn ext4 defaults 0 2"
-        create: yes
-
-    - name: Mount disk
-      command: mount -a
+# Ensure /dev/vdb1 is mounted and persisted (no formatting)
+- name: Mount /dev/vdb1 at /var/lib/longhorn
+  ansible.builtin.mount:
+    path: /var/lib/longhorn
+    src: /dev/vdb1
+    fstype: ext4
+    opts: defaults
+    state: mounted
