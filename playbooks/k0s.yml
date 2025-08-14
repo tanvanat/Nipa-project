@@ -1,0 +1,9 @@
+- hosts: controlplane[0]
+  become: yes
+  roles:
+    - { role: k0s, k0s_role: "controller", single: true }
+
+- hosts: workers
+  become: yes
+  roles:
+    - { role: k0s, k0s_role: "worker" }

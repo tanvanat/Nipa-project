@@ -1,0 +1,106 @@
+
+- name: Recreate apt metadata directories
+  ansible.builtin.file:
+    path: /var/lib/apt
+    state: directory
+    recurse: yes
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Ensure apt cache directory exists
+  ansible.builtin.file:
+    path: /var/lib/apt/lists
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+# --- REPO ENABLEMENT (Ubuntu) ---
+- name: Install software-properties-common (for add-apt-repository) on Ubuntu
+  ansible.builtin.apt:
+    name: software-properties-common
+    state: present
+    update_cache: yes
+  when:
+    - ansible_facts.os_family == "Debian"
+    - ansible_facts.distribution == "Ubuntu"
+
+- name: Enable 'universe' on Ubuntu (idempotent)
+  ansible.builtin.command: add-apt-repository -y universe
+  register: add_universe
+  changed_when: "'Adding' in add_universe.stdout or add_universe.rc == 0"
+  failed_when: add_universe.rc not in [0]
+  when:
+    - ansible_facts.os_family == "Debian"
+    - ansible_facts.distribution == "Ubuntu"
+
+- name: apt update after enabling repos (Ubuntu)
+  ansible.builtin.apt:
+    update_cache: yes
+    cache_valid_time: 0
+  when:
+    - ansible_facts.os_family == "Debian"
+    - ansible_facts.distribution == "Ubuntu"
+
+# --- BASE APT HEALTH ---
+- name: Ensure apt is installed and update cache
+  ansible.builtin.apt:
+    name: apt
+    state: present
+    update_cache: yes
+    cache_valid_time: 3600
+
+# --- PACKAGES ---
+# On Ubuntu 24.04+, apt-transport-https no longer exists. Install it only if the release still provides it.
+- name: Install base packages (common)
+  ansible.builtin.apt:
+    name:
+      - curl
+      - ca-certificates
+      - gnupg
+      - lvm2
+      - jq
+    state: present
+    update_cache: yes
+    cache_valid_time: 3600
+
+- name: Install apt-transport-https when available (older Ubuntu/Debian)
+  ansible.builtin.apt:
+    name: apt-transport-https
+    state: present
+    update_cache: yes
+  register: apt_https_result
+  failed_when: false
+  when: ansible_facts.os_family == "Debian"
+
+# --- KERNEL + SYSCTL ---
+- name: Enable kernel modules on boot
+  ansible.builtin.copy:
+    dest: /etc/modules-load.d/k8s.conf
+    content: |
+      overlay
+      br_netfilter
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Load overlay module
+  ansible.builtin.command: modprobe overlay
+
+- name: Load br_netfilter module
+  ansible.builtin.command: modprobe br_netfilter
+
+- name: Set sysctl params for Kubernetes
+  ansible.builtin.copy:
+    dest: /etc/sysctl.d/99-k8s.conf
+    content: |
+      net.bridge.bridge-nf-call-iptables=1
+      net.ipv4.ip_forward=1
+      net.bridge.bridge-nf-call-ip6tables=1
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Apply sysctl settings
+  ansible.builtin.command: sysctl --system

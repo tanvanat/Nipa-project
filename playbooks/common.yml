@@ -1,0 +1,30 @@
+- name: Prepare all nodes for Kubernetes setup
+  hosts: all
+  become: true
+  gather_facts: yes
+  pre_tasks:
+    - name: Debug apt metadata directory
+      ansible.builtin.stat:
+        path: /var/lib/apt
+      register: apt_dir
+    - name: Show apt metadata directory status
+      ansible.builtin.debug:
+        var: apt_dir.stat.exists
+    - name: Debug apt cache directory
+      ansible.builtin.stat:
+        path: /var/lib/apt/lists
+      register: apt_lists_dir
+    - name: Show apt cache directory status
+      ansible.builtin.debug:
+        var: apt_lists_dir.stat.exists
+    - name: Debug apt binary presence
+      ansible.builtin.command: which apt
+      register: apt_path
+      changed_when: false
+      ignore_errors: true
+    - name: Show apt binary path
+      ansible.builtin.debug:
+        var: apt_path.stdout
+
+  roles:
+    - role: common

@@ -1,0 +1,34 @@
+- name: Install Longhorn dependencies
+  apt:
+    name:
+      - open-iscsi
+      - nfs-common
+    state: present
+
+- name: Enable iscsid
+  systemd:
+    name: iscsid
+    enabled: yes
+    state: started
+
+- name: Format and mount disk
+  block:
+    - name: Format disk
+      filesystem:
+        fstype: ext4
+        dev: /dev/vdb1
+        force: yes
+
+    - name: Create mount point
+      file:
+        path: /var/lib/longhorn
+        state: directory
+
+    - name: Add fstab entry
+      lineinfile:
+        path: /etc/fstab
+        line: "/dev/vdb1 /var/lib/longhorn ext4 defaults 0 2"
+        create: yes
+
+    - name: Mount disk
+      command: mount -a
